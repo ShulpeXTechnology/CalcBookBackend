@@ -1,8 +1,11 @@
 const db = require("../config/db.config");
+const logger = require("../utils/logger");
 
-exports.createPurchase = (req, res) => {
+// CREATE PURCHASE
+exports.createPurchase = async (req, res) => {
+  const userId = req.user.id;
+
   const {
-    id,
     category,
     name,
     invoice,
@@ -25,14 +28,14 @@ exports.createPurchase = (req, res) => {
 
   const sql = `
     INSERT INTO purchase (
-      id, category, name, invoice, challn_no, due_date, description, design,
+      user_id, category, name, invoice, challn_no, due_date, description, design,
       quantity, rate, total, debit, status, plane, short, discount,
       discount_p, loss, amount
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const values = [
-    id,
+    userId,
     category,
     name,
     invoice,
@@ -53,56 +56,95 @@ exports.createPurchase = (req, res) => {
     amount,
   ];
 
-  db.query(sql, values, (err, result) => {
-    if (err) {
-      console.error("Database Insert Error:", err);
-      return res
-        .status(500)
-        .json({ error: "Failed to insert purchase record" });
-    }
+  // db.query(sql, values, (err, result) => {
+  //   if (err) {
+  //     logger.error(`Create Purchase Error [User: ${userId}]: ${err.message}`);
+  //     return res.status(500).json({ error: "Failed to insert purchase" });
+  //   }
+  //   logger.info(`Purchase Created [ID: ${result.insertId}, User: ${userId}]`);
+  //   res.status(201).json({ message: "Purchase created", id: result.insertId });
+  // });
 
-    res.status(201).json({
-      message: "Purchase inserted successfully",
-      insertId: result.insertId,
-    });
-  });
+  try {
+    const [result] = await db.query(sql, values);
+    res.status(201).json({ message: "Purchase created", id: result.insertId });
+  } catch (err) {
+    console.error("Create Purchase Error:", err.message);
+    res.status(500).json({ error: "Failed to insert purchase" });
+  }
 };
 
-exports.getAllPurchases = (req, res) => {
-  const sql = "SELECT * FROM purchase";
+// GET ALL PURCHASES
+exports.getAllPurchases = async (req, res) => {
+  const userId = req.user.id;
+  const sql = "SELECT * FROM purchase WHERE user_id = ?";
 
-  db.query(sql, (err, results) => {
-    if (err) {
-      console.error("Database Fetch Error:", err);
-      return res
-        .status(500)
-        .json({ error: "Failed to fetch purchase records" });
-    }
+  // db.query(sql, [userId], (err, results) => {
+  //   if (err) {
+  //     logger.error(`Get Purchases Error [User: ${userId}]: ${err.message}`);
+  //     return res.status(500).json({ error: "Failed to fetch purchases" });
+  //   }
+  //   logger.info(
+  //     `Fetched All Purchases [User: ${userId}, Count: ${results.length}]`
+  //   );
+  //   res.status(200).json(results);
+  // });
 
+  try {
+    const [results] = await db.query(sql, [userId]);
+    logger.info(
+      `Fetched All Purchases [User: ${userId}, Count: ${results.length}]`
+    );
     res.status(200).json(results);
-  });
+  } catch (err) {
+    logger.error(`Get Purchases Error [User: ${userId}]: ${err.message}`);
+    res.status(500).json({ error: "Failed to fetch purchases" });
+  }
 };
 
-exports.getPurchaseById = (req, res) => {
+// GET PURCHASE BY ID
+exports.getPurchaseById = async (req, res) => {
+  const userId = req.user.id;
   const purchaseId = req.params.id;
 
-  const sql = "SELECT * FROM purchase WHERE id = ?";
+  const sql = "SELECT * FROM purchase WHERE id = ? AND user_id = ?";
 
-  db.query(sql, [purchaseId], (err, result) => {
-    if (err) {
-      console.error("Database Fetch Error:", err);
-      return res.status(500).json({ error: "Failed to fetch purchase" });
-    }
+  // db.query(sql, [purchaseId, userId], (err, results) => {
+  //   if (err) {
+  //     logger.error(
+  //       `Get Purchase By ID Error [User: ${userId}, ID: ${purchaseId}]: ${err.message}`
+  //     );
+  //     return res.status(500).json({ error: "Failed to fetch purchase" });
+  //   }
+  //   if (results.length === 0) {
+  //     logger.warn(`Purchase Not Found [User: ${userId}, ID: ${purchaseId}]`);
+  //     return res.status(404).json({ error: "Purchase not found" });
+  //   }
+  //   logger.info(`Purchase Retrieved [User: ${userId}, ID: ${purchaseId}]`);
+  //   res.status(200).json(results[0]);
+  // });
 
-    if (result.length === 0) {
+  try {
+    const [results] = await db.query(sql, [purchaseId, userId]);
+
+    if (results.length == 0) {
+      logger.warn(`Purchase Not Found [User: ${userId}, ID: ${purchaseId}]`);
       return res.status(404).json({ error: "Purchase not found" });
     }
 
-    res.status(200).json(result[0]);
-  });
+    logger.info(`Purchase Retrieved [User: ${userId}, ID: ${purchaseId}]`);
+    res.status(200).json(results[0]);
+  } catch (err) {
+    logger.error(
+      `Get Purchase By ID Error [User: ${userId}, ID: ${purchaseId}]: ${err.message}`
+    );
+    res.status(500).json({ error: "Failed to fetch purchase" });
+  }
 };
 
-exports.updatePurchase = (req, res) => {
+// UPDATE PURCHASE
+exports.updatePurchase = async (req, res) => {
+  const userId = req.user.id;
   const purchaseId = req.params.id;
   const {
     category,
@@ -130,7 +172,7 @@ exports.updatePurchase = (req, res) => {
       category = ?, name = ?, invoice = ?, challn_no = ?, due_date = ?, description = ?, design = ?,
       quantity = ?, rate = ?, total = ?, debit = ?, status = ?, plane = ?, short = ?, discount = ?,
       discount_p = ?, loss = ?, amount = ?
-    WHERE id = ?
+    WHERE id = ? AND user_id = ?
   `;
 
   const values = [
@@ -153,41 +195,86 @@ exports.updatePurchase = (req, res) => {
     loss,
     amount,
     purchaseId,
+    userId,
   ];
 
-  db.query(sql, values, (err, result) => {
-    if (err) {
-      console.error("Database Update Error:", err);
-      return res
-        .status(500)
-        .json({ error: "Failed to update purchase record" });
-    }
+  // db.query(sql, values, (err, result) => {
+  //   if (err) {
+  //     logger.error(
+  //       `Update Purchase Error [User: ${userId}, ID: ${purchaseId}]: ${err.message}`
+  //     );
+  //     return res.status(500).json({ error: "Failed to update purchase" });
+  //   }
+  //   if (result.affectedRows === 0) {
+  //     logger.warn(
+  //       `Update Failed: Purchase Not Found [User: ${userId}, ID: ${purchaseId}]`
+  //     );
+  //     return res.status(404).json({ error: "Purchase not found" });
+  //   }
+  //   logger.info(`Purchase Updated [User: ${userId}, ID: ${purchaseId}]`);
+  //   res.status(200).json({ message: "Purchase updated successfully" });
+  // });
 
-    if (result.affectedRows === 0) {
+  try {
+    const [result] = await db.query(sql, values);
+
+    if (result.affectedRows == 0) {
+      logger.warn(
+        `Update Failed: Purchase Not Found [User: ${userId}, ID: ${purchaseId}]`
+      );
       return res.status(404).json({ error: "Purchase not found" });
     }
 
+    logger.info(`Purchase Updated [User: ${userId}, ID: ${purchaseId}]`);
     res.status(200).json({ message: "Purchase updated successfully" });
-  });
+  } catch (err) {
+    logger.error(
+      `Update Purchase Error [User: ${userId}, ID: ${purchaseId}]: ${err.message}`
+    );
+    res.status(500).json({ error: "Failed to update purchase" });
+  }
 };
 
-exports.deletePurchase = (req, res) => {
+// DELETE PURCHASE
+exports.deletePurchase = async (req, res) => {
+  const userId = req.user.id;
   const purchaseId = req.params.id;
 
-  const sql = "DELETE FROM purchase WHERE id = ?";
+  const sql = "DELETE FROM purchase WHERE id = ? AND user_id = ?";
 
-  db.query(sql, [purchaseId], (err, result) => {
-    if (err) {
-      console.error("Database Delete Error:", err);
-      return res
-        .status(500)
-        .json({ error: "Failed to delete purchase record" });
-    }
+  // db.query(sql, [purchaseId, userId], (err, result) => {
+  //   if (err) {
+  //     logger.error(
+  //       `Delete Purchase Error [User: ${userId}, ID: ${purchaseId}]: ${err.message}`
+  //     );
+  //     return res.status(500).json({ error: "Failed to delete purchase" });
+  //   }
+  //   if (result.affectedRows == 0) {
+  //     logger.warn(
+  //       `Delete Failed: Purchase Not Found [User: ${userId}, ID: ${purchaseId}]`
+  //     );
+  //     return res.status(404).json({ error: "Purchase not found" });
+  //   }
+  //   logger.info(`Purchase Deleted [User: ${userId}, ID: ${purchaseId}]`);
+  //   res.status(200).json({ message: "Purchase deleted successfully" });
+  // });
 
-    if (result.affectedRows === 0) {
+  try {
+    const [result] = await db.query(sql, [purchaseId, userId]);
+
+    if (result.affectedRows == 0) {
+      logger.warn(
+        `Delete Failed: Purchase Not Found [User: ${userId}, ID: ${purchaseId}]`
+      );
       return res.status(404).json({ error: "Purchase not found" });
     }
 
+    logger.info(`Purchase Deleted [User: ${userId}, ID: ${purchaseId}]`);
     res.status(200).json({ message: "Purchase deleted successfully" });
-  });
+  } catch (err) {
+    logger.error(
+      `Delete Purchase Error [User: ${userId}, ID: ${purchaseId}]: ${err.message}`
+    );
+    res.status(500).json({ error: "Failed to delete purchase" });
+  }
 };
