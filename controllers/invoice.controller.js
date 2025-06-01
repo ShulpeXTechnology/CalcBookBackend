@@ -1,6 +1,23 @@
 const db = require("../config/db.config");
 const logger = require("../utils/logger");
 
+// CHANGE DATE
+function convertToMySQLDateFormat(dateStr) {
+  if (!dateStr) return null;
+  const [day, month, year] = dateStr.split("-");
+  return `${year}-${month}-${day}`;
+}
+
+// Helper function to convert 'YYYY-MM-DD' to 'DD-MM-YYYY'
+function formatDateToDDMMYYYY(dateStr) {
+  if (!dateStr) return null;
+  const date = new Date(dateStr);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0"); // Month is 0-indexed
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
 // CREATE PURCHASE
 exports.createPurchase = async (req, res) => {
   const userId = req.user.id;
@@ -9,8 +26,8 @@ exports.createPurchase = async (req, res) => {
     category,
     name,
     invoice,
-    challn_no,
-    due_date,
+    challn_no = req.body.challn_no,
+    due_date = req.body.due_date,
     description,
     design,
     quantity,
@@ -40,7 +57,7 @@ exports.createPurchase = async (req, res) => {
     name,
     invoice,
     challn_no,
-    due_date,
+    convertToMySQLDateFormat(due_date),
     description,
     design,
     quantity,
@@ -92,10 +109,17 @@ exports.getAllPurchases = async (req, res) => {
 
   try {
     const [results] = await db.query(sql, [userId]);
+
+    // Convert due_date format
+    const formattedResults = results.map((purchase) => ({
+      ...purchase,
+      due_date: formatDateToDDMMYYYY(purchase.due_date),
+    }));
+
     logger.info(
       `Fetched All Purchases [User: ${userId}, Count: ${results.length}]`
     );
-    res.status(200).json(results);
+    res.status(200).json(formattedResults);
   } catch (err) {
     logger.error(`Get Purchases Error [User: ${userId}]: ${err.message}`);
     res.status(500).json({ error: "Failed to fetch purchases" });
